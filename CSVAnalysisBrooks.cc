@@ -532,3 +532,11 @@ int main(){
   
   return 0;
 }
+
+//options.txt format
+/*
+Input (directory):/home/bhartsock/analysis/binDecoder/output
+Output (file):test2.root
+Save pictures (bool):0
+Invert signal (bool):0
+*/
