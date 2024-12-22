@@ -393,17 +393,21 @@ std::pair<std::vector<double>, std::vector<double>> decodeChannelData(
 
 
 int main(int argc, char *argv[]) {
+
+  
   if (argc < 2) {
     std::cerr << "Usage: " << argv[0] << " <inputDir>\n";
     return 1;
   }
+
+  int file_count = 0;
 
   std::string inputDir = argv[1];
   std::string inputPathCh1;
   std::string inputPathCh2;
   std::string outputPath = "output";
 
-  int maxFiles = 11000; //1e5
+  int maxFiles = 11000; //11000
   for(int file = 0; file < maxFiles; ++file){
 
     std::ostringstream file1OSS;
@@ -470,15 +474,20 @@ int main(int argc, char *argv[]) {
     double ch1_probe = h1.ch_probe[0]; // For CH1
     double ch2_probe = h2.ch_probe[1]; // For CH2
 
-    int file_count = 0;
-    for(const auto& entry : std::filesystem::directory_iterator(outputPath)){
-      if(std::filesystem::is_regular_file(entry.status())){
-	++file_count;
+    if(file == 0){ //count files at start of run
+      for(const auto& entry : std::filesystem::directory_iterator(outputPath)){
+	if(std::filesystem::is_regular_file(entry.status())){
+	  ++file_count;
+	}
       }
     }
 
+    //std::cout << file_count << "\n";
+
     std::string outFilename = outputPath + "/SDS"
       + std::to_string(file_count) + "ALL.csv";
+
+    ++file_count;
 
     // Write combined CSV: Time, CH1, CH2
     std::ofstream ofs(outFilename);
@@ -514,7 +523,7 @@ int main(int argc, char *argv[]) {
     }
     ofs << "\n";
 
-    std::cout << "Decoding complete. Results written to " << outFilename << "\n";
+    //std::cout << "Decoding complete. Results written to " << outFilename << "\n";
   } catch (const std::exception &ex) {
     std::cerr << "Error: " << ex.what() << "\n";
     return 1;
