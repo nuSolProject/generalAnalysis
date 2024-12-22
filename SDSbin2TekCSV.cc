@@ -533,3 +533,28 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+
+//bash script for running multiple batches at once
+/*
+#!/bin/bash
+
+rm output/*
+
+# Loop through run01 to run09
+for i in {1..9}
+do
+    # Format the run number with leading zero (e.g., run01, run02, ...)
+    run_number=$(printf "run%02d" $i)
+    
+    # Construct the command
+    command="./SDSBin2TekCSV /home/bhartsock/data/57Co01-09/$run_number/Autosave"
+    
+    # Run the command
+    echo "Running: $command"
+    $command
+    
+    # Optional: Add a delay if needed, e.g., 1 second between runs
+    # sleep 1
+done
+
+*/
