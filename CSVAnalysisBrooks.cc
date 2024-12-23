@@ -20,26 +20,28 @@
 
 //globals
 //input csv data
-const int dataSize = 2000;
+int dataSize = 1000;
 double* data = nullptr;
-double timeData[dataSize];
-double dataCh1[dataSize];
-double dataCh2[dataSize];
-double dataChSum[dataSize];
+double* timeData = nullptr;
+double* dataCh1 = nullptr;
+double* dataCh2 = nullptr;
+//double* dataChSum[dataSize];
 bool tekScope = 1; //tek scope by default
 
 //outData
 struct outData{
   double peak;
+  double triggerTime;
   double fullInt;
   double RAPeak; //rolling average peak
   double landauPeak;
   double intPeak;
   double peakTime;
   double decayTime;
-  outData(double P, double FI, double RAP, double lP, double iP, double pT,
-	  double dT) : peak(P), fullInt(FI), RAPeak(RAP), landauPeak(lP),
-		       intPeak(iP), peakTime(pT), decayTime(dT) {}
+  outData(double P, double TT, double FI, double RAP, double lP, double iP,
+	  double pT, double dT) : peak(P), triggerTime(TT), fullInt(FI),
+				  RAPeak(RAP), landauPeak(lP), intPeak(iP),
+				  peakTime(pT), decayTime(dT) {}
 };
 
 std::vector<outData> outDataList;
@@ -49,6 +51,7 @@ std::string inputDirectory;
 std::string outputFilename;
 bool savePicture; //1 for saving pngs, 0 for no pngs saved
 bool pTube; // 0 for SiPM (positive landau), 1 for Ptube (negative)
+int channelNo;
 
 
 void updateProgressBar(int currentValue, int maxValue){
@@ -131,6 +134,10 @@ bool readOptions(){
       else if(parameter == "Invert signal (bool)"){
 	pTube = (value == "1" || value == "true"); // Set true if '1' or 'true'
       }
+      else if(parameter == "Channel Number (int)"){
+	channelNo = std::stoi(value);
+	//std::cout << "Channel Number is: " << channelNo << "\n";
+      }
     }
   }
   
@@ -201,16 +208,16 @@ bool getCSVData(std::string filename){
   return true;
 }
 
-
-void sumChannels(){
+/*
+  void sumChannels(){
 
 
   for(int i = 0; i < dataSize; ++i){
-    dataChSum[i] = dataCh1[i] + dataCh2[i];
+  dataChSum[i] = dataCh1[i] + dataCh2[i];
   }
 
   
-}
+  }*/
 
 
 void coutCSVData(){
@@ -241,31 +248,53 @@ void zeroData(){
 }
 
 
-void getPeak(){
+int getPeak(){
 
   
   double peak = data[0];
+  int peakIndex;
   for(int csvIndex = 0; csvIndex < dataSize; ++ csvIndex){
     if(data[csvIndex] > peak){
       peak = data[csvIndex];
+      peakIndex = csvIndex;
     }
   }
   
-  outDataList.emplace_back(peak, 0, 0, 0, 0, 0, 0);
+  outDataList.emplace_back(peak, 0, 0, 0, 0, 0, 0, 0);
   
+
+  return peakIndex;
+}
+
+
+void getTrigTime(int peakIndex, int fileIndex){
+
+
+  double trigTime = 0;
+  double trigThreshold = .001; //1 mV
+  
+  for(int CSVIndex = peakIndex; CSVIndex > 0; --CSVIndex){
+    if(data[CSVIndex] < trigThreshold){
+      trigTime = timeData[CSVIndex];
+      break;
+    }
+  }
+
+  outDataList[fileIndex].triggerTime = trigTime;
+
   
 }
 
 
 void getRAPeak(int fileIndex){
 
-  
   double peakTimeEst;
   
   int offset = 5 * dataSize/1000; //set 0 for 1, 1 for 3, 2 for 5 points...
   int nPoints = (2*offset) + 1;
-  int peakIndex, decayTimeIndex;
+  int peakIndex = 0, decayTimeIndex = 0;
   double RAPeak = data[0];
+  bool setNewRAPeak = 0;
   
   for(int csvIndex = offset; csvIndex < (dataSize-offset); ++csvIndex){
     
@@ -278,9 +307,12 @@ void getRAPeak(int fileIndex){
     if(rollingAv > RAPeak){
       RAPeak = rollingAv;
       peakIndex = csvIndex;
+      setNewRAPeak = 1;
     }
 	
   }
+
+  //std::cout << "peakIndex: " << peakIndex << "\n";
   
   for(int csvIndex = (peakIndex+1); csvIndex < (dataSize-offset); ++csvIndex){
     
@@ -290,12 +322,13 @@ void getRAPeak(int fileIndex){
     }
     rollingAv /= nPoints;
     
-    if(rollingAv < (RAPeak/2.718281) || (csvIndex == (dataSize-offset-1))){
+    if(rollingAv < (RAPeak/2.718281) || (csvIndex == (dataSize-offset))){
       decayTimeIndex = csvIndex;
       break;
     }
     
   }
+
   
   outDataList[fileIndex].RAPeak = RAPeak;
   outDataList[fileIndex].peakTime = timeData[peakIndex];
@@ -309,11 +342,12 @@ void coutOutListData(){
 
   
   for(int i = 0; i < outDataList.size(); ++i){
-    std::cout << i << "," << outDataList[i].peak << "," << outDataList[i].fullInt
-	      << "," << outDataList[i].RAPeak << "," << outDataList[i].landauPeak
-	      << "," << outDataList[i].intPeak << ","
-	      << outDataList[i].peakTime << "," << outDataList[i].decayTime
-	      << "\n";
+    std::cout << i << "," << outDataList[i].peak << ","
+	      << outDataList[i].triggerTime << "," << outDataList[i].fullInt
+	      << "," << outDataList[i].RAPeak << ","
+	      << outDataList[i].landauPeak << "," << outDataList[i].intPeak
+	      << "," << outDataList[i].peakTime << ","
+	      << outDataList[i].decayTime << "\n";
   }
   
   
@@ -446,11 +480,12 @@ void storeDataInNtuple(const std::vector<outData>& dataList){
 
   
   // Create a TNtupleD
-  TNtupleD* ntuple = new TNtupleD("ntuple", "Data Ntuple", "peak:fullInt:RAPeak:landauPeak:intPeak:peakTime:decayTime");
+  TNtupleD* ntuple = new TNtupleD("ntuple", "Data Ntuple", "peak:trigTime:fullInt:RAPeak:landauPeak:intPeak:peakTime:decayTime");
   // Fill the ntuple
   for(const auto& data : dataList){
-    Double_t values[] = {data.peak, data.fullInt, data.RAPeak, data.landauPeak,
-      data.intPeak, data.peakTime, data.decayTime};
+    Double_t values[] = {data.peak, data.triggerTime, data.fullInt,
+      data.RAPeak, data.landauPeak, data.intPeak, data.peakTime,
+      data.decayTime};
     ntuple->Fill(values);
   }
   // Save the ntuple to a ROOT file using the global outputFilename
@@ -479,17 +514,26 @@ int main(){
     }
   }
   //std::cout << file_count << "\n";
-
-  data = dataCh2;
   
   std::string currentCSVFileName;
-  int maxCSVFiles = 1e6;//1e6
+  int maxCSVFiles = 1e4;//1e6
 
   if(maxCSVFiles < file_count){
     file_count = maxCSVFiles;
   }
   
   for(int fileIndex = 0; fileIndex < maxCSVFiles; ++fileIndex){
+
+    timeData = new double[dataSize];
+    dataCh1 = new double[dataSize];
+    dataCh2 = new double[dataSize];
+
+    if(channelNo == 1){
+      data = dataCh1;
+    }
+    else if(channelNo == 2){
+      data = dataCh2;
+    }
     
     std::ostringstream oss;
     if(tekScope){
@@ -506,15 +550,16 @@ int main(){
       else{
 	--fileIndex;
 	tekScope = 0;
+	dataSize = 2000;
 	continue;
       }
     }
 
-    sumChannels();
-    
+    //sumChannels();
     //coutCSVData();
     //zeroData();
-    getPeak();
+    int peakIndex = getPeak();
+    getTrigTime(peakIndex, fileIndex);
     //getFullInt(fileIndex);
     getRAPeak(fileIndex);
     getLandauPeak(fileIndex);
@@ -528,15 +573,10 @@ int main(){
   }
   //coutOutListData();
   storeDataInNtuple(outDataList);
-  
+
+  delete[] timeData;
+  delete[] dataCh1;
+  delete[] dataCh2;
   
   return 0;
 }
-
-//options.txt format
-/*
-Input (directory):/home/bhartsock/analysis/binDecoder/output
-Output (file):test2.root
-Save pictures (bool):0
-Invert signal (bool):0
-*/
