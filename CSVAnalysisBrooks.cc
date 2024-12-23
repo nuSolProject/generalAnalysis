@@ -516,7 +516,7 @@ int main(){
   //std::cout << file_count << "\n";
   
   std::string currentCSVFileName;
-  int maxCSVFiles = 1e4;//1e6
+  int maxCSVFiles = 1e7;//1e6
 
   if(maxCSVFiles < file_count){
     file_count = maxCSVFiles;
@@ -580,3 +580,12 @@ int main(){
   
   return 0;
 }
+
+//options.txt format
+/*
+Input (directory):/home/bhartsock/analysis/binDecoder/output
+Output (file):test.root
+Save pictures (bool):0
+Invert signal (bool):0
+Channel Number (int):2
+*/
