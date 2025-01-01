@@ -267,22 +267,25 @@ int getPeak(){
 }
 
 
-void getTrigTime(int peakIndex, int fileIndex){
+int getTrigTime(int peakIndex, int fileIndex){
 
 
-  double trigTime = 0;
+  double trigTime = std::nan(""); //if no trigger can be found, stays NAN
+  int trigIndex = 0;
   double trigThreshold = .001; //1 mV
   
   for(int CSVIndex = peakIndex; CSVIndex > 0; --CSVIndex){
     if(data[CSVIndex] < trigThreshold){
       trigTime = timeData[CSVIndex];
+      trigIndex = CSVIndex;
       break;
     }
   }
 
   outDataList[fileIndex].triggerTime = trigTime;
 
-  
+
+  return trigIndex;
 }
 
 
@@ -354,7 +357,7 @@ void coutOutListData(){
 }
 
 
-void getLandauPeak(int fileIndex){
+void getLandauPeak(int fileIndex, int trigIndex){
   
 
   gErrorIgnoreLevel = kFatal;
@@ -372,12 +375,18 @@ void getLandauPeak(int fileIndex){
   }
   
   //std::cout << timeVec.size() << "," << dataVec.size() << "\n";
-  int j = 0; //find j for initial time of peak
-  while((timeVec[j] < 0) && j < dataSize){
+  
+  int j = trigIndex; //find j for initial time of peak
+  /*
+  while((timeVec[j] < outDataList[fileIndex].triggerTime) && j < dataSize){
     j += 1;
   }
-  int k = 0; //find k corresponding to time esitmate, "won't" break 
-  while((timeVec[k] < outDataList[fileIndex].decayTime) && (k < dataSize)){
+  --j;*/
+  //std::cout << data[j] << "\n";
+  int k = 0; //find k corresponding to time esitmate, "won't" break
+  double fullTime = outDataList[fileIndex].peakTime +
+    outDataList[fileIndex].decayTime;
+  while((timeVec[k] < fullTime) && (k < dataSize)){
     k +=1;
   }
   
@@ -388,14 +397,12 @@ void getLandauPeak(int fileIndex){
  
   // Create a Landau distribution function with initial parameter values
   TF1 *landauFunc = new TF1("landauFunc","landau",
-			    timeVec[j - (10 * dataSize/1000)],
-			    timeVec[k + (160 * dataSize/1000)]);
+			    timeVec[j], timeVec[k]);
   // Set the minimizer to Minuit (the original one)
   //ROOT::Math::MinimizerOptions::SetDefaultMinimizer("Minuit");
   
   // Fit the Landau function to the data
-  graph->Fit("landauFunc", "Q", "", timeVec[j - (10 * dataSize/1000)],
-	     timeVec[k + (160 * dataSize/1000)]); 
+  graph->Fit("landauFunc", "Q", "", timeVec[j], timeVec[k]); 
   //change to "R" to see things 0_0
   // Get the fit results
   double amp = landauFunc->GetParameter(0);
@@ -434,12 +441,12 @@ void getLandauPeak(int fileIndex){
 }
 
 
-void getIntPeak(int fileIndex){
+void getIntPeak(int fileIndex, int trigIndex){
 
   
   int intEndIndex;
-  double intTime = outDataList[fileIndex].peakTime
-    + (3 * outDataList[fileIndex].decayTime);
+  double intTime = timeData[trigIndex] + outDataList[fileIndex].peakTime
+    + (1. * outDataList[fileIndex].decayTime);
        
   for(int csvIndex = 0; csvIndex < dataSize; ++csvIndex){
     
@@ -451,7 +458,7 @@ void getIntPeak(int fileIndex){
   }
   
   double intPeak = 0;
-  for(int csvIndex = 0; csvIndex < intEndIndex; ++csvIndex){
+  for(int csvIndex = trigIndex; csvIndex < intEndIndex; ++csvIndex){
     intPeak += .5 * (data[csvIndex] + data[csvIndex+1])
       * (timeData[csvIndex+1] - timeData[csvIndex]);
   }
@@ -516,7 +523,7 @@ int main(){
   //std::cout << file_count << "\n";
   
   std::string currentCSVFileName;
-  int maxCSVFiles = 1e7;//1e6
+  int maxCSVFiles = 1e6;//1e6
 
   if(maxCSVFiles < file_count){
     file_count = maxCSVFiles;
@@ -559,11 +566,11 @@ int main(){
     //coutCSVData();
     //zeroData();
     int peakIndex = getPeak();
-    getTrigTime(peakIndex, fileIndex);
+    int trigIndex = getTrigTime(peakIndex, fileIndex);
     //getFullInt(fileIndex);
     getRAPeak(fileIndex);
-    getLandauPeak(fileIndex);
-    getIntPeak(fileIndex);
+    getLandauPeak(fileIndex, trigIndex);
+    getIntPeak(fileIndex, trigIndex);
     getFullInt(fileIndex);
 
     updateProgressBar(fileIndex, file_count);
