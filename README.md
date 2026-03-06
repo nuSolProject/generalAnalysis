@@ -70,5 +70,3 @@ $ make -j4 # number of cores, e.g. if you have 8 cores put -j8
 
 
 
-
-bozo
