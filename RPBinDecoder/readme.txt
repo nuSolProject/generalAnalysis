@@ -1,0 +1,1 @@
+RPBinDecoder.cc for binVolts.c RP script data. General waveform reconstruction with full/gates integral and 3-exp fit for 2 channel data. This is V1 and it's decently stable, 57Co DP half-life is like 2 ns off so lets spend a couple weeks to fix that
